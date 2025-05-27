@@ -346,14 +346,14 @@ def main():
                 
                 table_matching_data = []
                 
-                # Tables found in queries
+                # All tables found in queries (including those not in Excel)
                 for table in all_query_tables:
                     query_count = sum(1 for result in st.session_state.analysis_results if table in result.get('tables', []))
                     if table in all_excel_tables:
                         excel_field_count = len(st.session_state.table_metadata[table])
                         table_matching_data.append({
                             'Table Name': table,
-                            'Found in Excel': '✅ Yes',
+                            'Found in Excel': 'Yes',
                             'Used in Queries': query_count,
                             'Excel Fields Count': excel_field_count,
                             'Status': 'Matched'
@@ -361,7 +361,7 @@ def main():
                     else:
                         table_matching_data.append({
                             'Table Name': table,
-                            'Found in Excel': '❌ No',
+                            'Found in Excel': 'No',
                             'Used in Queries': query_count,
                             'Excel Fields Count': 0,
                             'Status': 'Missing in Excel'
@@ -373,7 +373,7 @@ def main():
                     excel_field_count = len(st.session_state.table_metadata[table])
                     table_matching_data.append({
                         'Table Name': table,
-                        'Found in Excel': '✅ Yes',
+                        'Found in Excel': 'Yes',
                         'Used in Queries': 0,
                         'Excel Fields Count': excel_field_count,
                         'Status': 'Unused in Queries'
