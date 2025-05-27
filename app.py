@@ -400,20 +400,26 @@ def main():
                     total_matching_fields = 0
                     total_excel_fields = 0
                     matched_tables = 0
+                    matched_table_names = []
+                    matched_field_names = []
                     
                     for table in query_tables:
                         if table in st.session_state.table_metadata:
                             matched_tables += 1
+                            matched_table_names.append(table)
                             excel_fields = [field['name'] for field in st.session_state.table_metadata[table]]
                             total_excel_fields += len(excel_fields)
                             matching_fields = [col for col in query_columns if col in excel_fields]
                             total_matching_fields += len(matching_fields)
+                            matched_field_names.extend(matching_fields)
                     
                     detailed_query_data.append({
                         'Query ID': query_id,
                         'Query Type': query_type,
+                        'Table Names in Query': ', '.join(query_tables),
                         'Tables in Query': len(query_tables),
                         'Tables Matched in Excel': matched_tables,
+                        'Table Field Matching in Excel': ', '.join(set(matched_field_names)) if matched_field_names else 'None',
                         'Fields in Query': len(query_columns),
                         'Fields Matched in Excel': total_matching_fields,
                         'Has Joins': '✅' if result.get('has_joins', False) else '❌',
