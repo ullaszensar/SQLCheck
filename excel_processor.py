@@ -11,8 +11,8 @@ class ExcelProcessor:
     def __init__(self):
         self.supported_extensions = ['.xlsx', '.xls']
         self.expected_columns = {
-            'table_name': ['table_name', 'table', 'tablename', 'table_nm'],
-            'field_name': ['field_name', 'field', 'column', 'column_name', 'fieldname'],
+            'table_name': ['table_name', 'table', 'tablename', 'table_nm', 'tableName'],
+            'field_name': ['field_name', 'field', 'column', 'column_name', 'fieldname', 'fieldsql', 'FieldSQL'],
             'data_type': ['data_type', 'datatype', 'type', 'field_type'],
             'description': ['description', 'desc', 'comment', 'remarks']
         }
