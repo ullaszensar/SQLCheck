@@ -385,6 +385,40 @@ def main():
                 
                 st.markdown("---")
                 
+                # Table 1.5: Tables in SQL but Missing from Excel
+                st.subheader("⚠️ Table 1.5: Tables Found in SQL but Missing from Excel")
+                
+                missing_tables_data = []
+                missing_tables = all_query_tables - all_excel_tables
+                
+                if missing_tables:
+                    for table in missing_tables:
+                        query_count = sum(1 for result in st.session_state.analysis_results if table in result.get('tables', []))
+                        
+                        # Find which queries use this missing table
+                        queries_using_table = []
+                        for result in st.session_state.analysis_results:
+                            if table in result.get('tables', []):
+                                queries_using_table.append(result.get('query_id', 'Unknown'))
+                        
+                        missing_tables_data.append({
+                            'Table Name': table,
+                            'Used in Queries Count': query_count,
+                            'Query IDs Using This Table': ', '.join(queries_using_table),
+                            'Impact Level': 'High' if query_count > 2 else 'Medium' if query_count > 1 else 'Low',
+                            'Action Required': 'Add to Excel metadata or verify table name spelling'
+                        })
+                    
+                    df_missing_tables = pd.DataFrame(missing_tables_data)
+                    st.dataframe(df_missing_tables, use_container_width=True)
+                    
+                    # Alert summary
+                    st.error(f"⚠️ Found {len(missing_tables)} tables in SQL queries that are not documented in Excel metadata")
+                else:
+                    st.success("✅ All tables from SQL queries are documented in Excel metadata")
+                
+                st.markdown("---")
+                
                 # Table 2: Detailed Query Analysis with Field Matching
                 st.subheader("🔍 Table 2: Detailed Query Analysis with Field Matching")
                 
