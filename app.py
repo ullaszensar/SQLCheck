@@ -468,6 +468,72 @@ def main():
                 
                 st.markdown("---")
                 
+                # Table 2.5: All Tables in Excel File (Non-Temporary)
+                st.subheader("📋 Table 2.5: All Tables in Excel File")
+                
+                excel_tables_data = []
+                
+                if st.session_state.table_metadata:
+                    for table_name, fields in st.session_state.table_metadata.items():
+                        # Check if it's a temporary table (exclude tables with temp-like names)
+                        is_temp_table = any(temp_indicator in table_name.lower() for temp_indicator in ['temp', 'tmp', '#', 'cte_', 'with_'])
+                        
+                        if not is_temp_table:
+                            # Check if this table is used in any query
+                            table_used_in_queries = any(table_name in result.get('tables', []) for result in st.session_state.analysis_results)
+                            query_usage_count = sum(1 for result in st.session_state.analysis_results if table_name in result.get('tables', []))
+                            
+                            # Get unique data types in this table
+                            data_types = list(set([field.get('data_type', 'unknown') for field in fields]))
+                            
+                            excel_tables_data.append({
+                                'Table Name': table_name,
+                                'Fields Count': len(fields),
+                                'Used in SQL Queries': '✅' if table_used_in_queries else '❌',
+                                'Query Usage Count': query_usage_count,
+                                'Data Types in Table': ', '.join(data_types[:5]) + ('...' if len(data_types) > 5 else ''),
+                                'Status': 'Active' if table_used_in_queries else 'Unused',
+                                'Sample Fields': ', '.join([field['name'] for field in fields[:3]]) + ('...' if len(fields) > 3 else '')
+                            })
+                
+                if excel_tables_data:
+                    df_excel_tables = pd.DataFrame(excel_tables_data)
+                    
+                    # Add filtering options
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        show_unused_only = st.checkbox("Show only unused tables", key="excel_unused_filter")
+                    with col2:
+                        min_fields = st.number_input("Minimum fields count:", min_value=0, value=0, key="excel_min_fields")
+                    
+                    # Apply filters
+                    filtered_excel_df = df_excel_tables.copy()
+                    
+                    if show_unused_only:
+                        filtered_excel_df = filtered_excel_df[filtered_excel_df['Used in SQL Queries'] == '❌']
+                    
+                    if min_fields > 0:
+                        filtered_excel_df = filtered_excel_df[filtered_excel_df['Fields Count'] >= min_fields]
+                    
+                    st.dataframe(filtered_excel_df, use_container_width=True)
+                    
+                    # Summary for Excel tables
+                    total_excel_tables = len(df_excel_tables)
+                    unused_excel_tables = len(df_excel_tables[df_excel_tables['Used in SQL Queries'] == '❌'])
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Total Tables in Excel", total_excel_tables)
+                    with col2:
+                        st.metric("Unused Tables", unused_excel_tables)
+                    with col3:
+                        st.metric("Table Usage Rate", f"{((total_excel_tables-unused_excel_tables)/total_excel_tables*100):.1f}%")
+                
+                else:
+                    st.info("No non-temporary tables found in Excel metadata")
+                
+                st.markdown("---")
+                
                 # Table 3: Complete Field Inventory
                 st.subheader("🔍 Table 3: Complete Field Inventory from Excel")
                 
