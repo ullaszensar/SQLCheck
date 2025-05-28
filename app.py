@@ -179,7 +179,7 @@ def main():
         st.header("📋 Analysis Results")
         
         # Tabs for different views
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Summary Table", "📈 Visualizations", "🔍 Detailed Analysis", "📋 Excel Comparison", "📥 Export"])
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 Summary Table", "📈 Visualizations", "🔍 Detailed Analysis", "📋 Excel Comparison", "📄 SQL File Analysis", "📥 Export"])
         
         with tab1:
             # Create summary DataFrame
@@ -707,6 +707,159 @@ def main():
                 st.warning("⚠️ Please upload Excel metadata first to see comparison tables")
         
         with tab5:
+            # SQL File Analysis Tab - Tables only from SQL files
+            st.header("📄 SQL File Analysis")
+            st.subheader("All Tables Used in SQL Files")
+            
+            # Table 1: Complete List of Tables from SQL Files
+            st.markdown("### 📋 Table 1: All Tables in SQL Queries")
+            
+            sql_only_tables_data = []
+            
+            # Get all tables from SQL queries
+            all_sql_tables = set()
+            for result in st.session_state.analysis_results:
+                tables = result.get('tables', [])
+                temp_tables = result.get('temp_tables', [])
+                # Include both regular and temporary tables
+                all_sql_tables.update(tables)
+            
+            if all_sql_tables:
+                for table_name in sorted(all_sql_tables):
+                    # Count usage across all queries
+                    query_usage_count = sum(1 for result in st.session_state.analysis_results if table_name in result.get('tables', []))
+                    
+                    # Check if it's a temporary table
+                    is_temp = any(table_name in result.get('temp_tables', []) for result in st.session_state.analysis_results)
+                    
+                    # Get queries that use this table
+                    queries_using_table = []
+                    query_types_using_table = []
+                    for result in st.session_state.analysis_results:
+                        if table_name in result.get('tables', []):
+                            queries_using_table.append(result.get('query_id', 'Unknown'))
+                            query_types_using_table.append(result.get('query_type', 'UNKNOWN'))
+                    
+                    sql_only_tables_data.append({
+                        'Table Name': table_name,
+                        'Table Type': 'Temporary' if is_temp else 'Regular',
+                        'Usage Count': query_usage_count,
+                        'Query Types Using': ', '.join(set(query_types_using_table)),
+                        'Query IDs Using': ', '.join(queries_using_table),
+                        'Usage Frequency': 'High' if query_usage_count > 3 else 'Medium' if query_usage_count > 1 else 'Low'
+                    })
+            
+            if sql_only_tables_data:
+                df_sql_only_tables = pd.DataFrame(sql_only_tables_data)
+                
+                # Add filtering options
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    table_type_filter = st.selectbox("Filter by Table Type:", ['All', 'Regular', 'Temporary'], key="sql_table_type")
+                with col2:
+                    usage_filter = st.selectbox("Filter by Usage:", ['All', 'High', 'Medium', 'Low'], key="sql_usage_freq")
+                with col3:
+                    min_usage_count = st.number_input("Min usage count:", min_value=0, value=0, key="sql_min_usage_count")
+                
+                # Apply filters
+                filtered_sql_only = df_sql_only_tables.copy()
+                
+                if table_type_filter != 'All':
+                    filtered_sql_only = filtered_sql_only[filtered_sql_only['Table Type'] == table_type_filter]
+                
+                if usage_filter != 'All':
+                    filtered_sql_only = filtered_sql_only[filtered_sql_only['Usage Frequency'] == usage_filter]
+                
+                if min_usage_count > 0:
+                    filtered_sql_only = filtered_sql_only[filtered_sql_only['Usage Count'] >= min_usage_count]
+                
+                st.dataframe(filtered_sql_only, use_container_width=True)
+                
+                # Statistics
+                total_tables = len(df_sql_only_tables)
+                regular_tables = len(df_sql_only_tables[df_sql_only_tables['Table Type'] == 'Regular'])
+                temp_tables = len(df_sql_only_tables[df_sql_only_tables['Table Type'] == 'Temporary'])
+                high_usage = len(df_sql_only_tables[df_sql_only_tables['Usage Frequency'] == 'High'])
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Total Tables", total_tables)
+                with col2:
+                    st.metric("Regular Tables", regular_tables)
+                with col3:
+                    st.metric("Temporary Tables", temp_tables)
+                with col4:
+                    st.metric("High Usage Tables", high_usage)
+            
+            st.markdown("---")
+            
+            # Table 2: Query-Table Relationship
+            st.markdown("### 🔗 Table 2: Query-Table Relationships")
+            
+            query_table_data = []
+            
+            for result in st.session_state.analysis_results:
+                query_id = result.get('query_id', 'Unknown')
+                query_type = result.get('query_type', 'UNKNOWN')
+                tables = result.get('tables', [])
+                temp_tables = result.get('temp_tables', [])
+                has_joins = result.get('has_joins', False)
+                join_types = result.get('join_types', [])
+                complexity = result.get('complexity_score', 0)
+                
+                for table in tables:
+                    is_temp = table in temp_tables
+                    
+                    query_table_data.append({
+                        'Query ID': query_id,
+                        'Query Type': query_type,
+                        'Table Name': table,
+                        'Table Type': 'Temporary' if is_temp else 'Regular',
+                        'Has Joins': '✅' if has_joins else '❌',
+                        'Join Types': ', '.join(join_types) if join_types else 'None',
+                        'Complexity Score': complexity
+                    })
+            
+            if query_table_data:
+                df_query_table = pd.DataFrame(query_table_data)
+                
+                # Filtering options for query-table relationships
+                col1, col2 = st.columns(2)
+                with col1:
+                    query_type_filter = st.selectbox("Filter by Query Type:", ['All'] + list(df_query_table['Query Type'].unique()), key="qt_query_type")
+                with col2:
+                    joins_filter = st.selectbox("Filter by Joins:", ['All', 'With Joins', 'Without Joins'], key="qt_joins")
+                
+                # Apply filters
+                filtered_qt = df_query_table.copy()
+                
+                if query_type_filter != 'All':
+                    filtered_qt = filtered_qt[filtered_qt['Query Type'] == query_type_filter]
+                
+                if joins_filter == 'With Joins':
+                    filtered_qt = filtered_qt[filtered_qt['Has Joins'] == '✅']
+                elif joins_filter == 'Without Joins':
+                    filtered_qt = filtered_qt[filtered_qt['Has Joins'] == '❌']
+                
+                st.dataframe(filtered_qt, use_container_width=True)
+                
+                # Summary for query-table relationships
+                total_relationships = len(df_query_table)
+                select_relationships = len(df_query_table[df_query_table['Query Type'] == 'SELECT'])
+                join_relationships = len(df_query_table[df_query_table['Has Joins'] == '✅'])
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Query-Table Relations", total_relationships)
+                with col2:
+                    st.metric("SELECT Query Relations", select_relationships)
+                with col3:
+                    st.metric("Relations with Joins", join_relationships)
+            
+            else:
+                st.info("No query-table relationships found")
+        
+        with tab6:
             # Export options
             st.subheader("📥 Export Analysis Results")
             
