@@ -468,69 +468,80 @@ def main():
                 
                 st.markdown("---")
                 
-                # Table 2.5: All Tables in Excel File (Non-Temporary)
-                st.subheader("📋 Table 2.5: All Tables in Excel File")
+                # Table 2.5: All Tables Found in SQL Files (Non-Temporary)
+                st.subheader("📋 Table 2.5: All Tables Found in SQL Files")
                 
-                excel_tables_data = []
+                sql_tables_data = []
                 
-                if st.session_state.table_metadata:
-                    for table_name, fields in st.session_state.table_metadata.items():
-                        # Check if it's a temporary table (exclude tables with temp-like names)
-                        is_temp_table = any(temp_indicator in table_name.lower() for temp_indicator in ['temp', 'tmp', '#', 'cte_', 'with_'])
+                # Get all tables from SQL queries (excluding temporary tables)
+                all_sql_tables = set()
+                for result in st.session_state.analysis_results:
+                    tables = result.get('tables', [])
+                    temp_tables = result.get('temp_tables', [])
+                    # Only include non-temporary tables
+                    non_temp_tables = [table for table in tables if table not in temp_tables]
+                    all_sql_tables.update(non_temp_tables)
+                
+                if all_sql_tables:
+                    for table_name in sorted(all_sql_tables):
+                        # Count how many queries use this table
+                        query_usage_count = sum(1 for result in st.session_state.analysis_results if table_name in result.get('tables', []))
                         
-                        if not is_temp_table:
-                            # Check if this table is used in any query
-                            table_used_in_queries = any(table_name in result.get('tables', []) for result in st.session_state.analysis_results)
-                            query_usage_count = sum(1 for result in st.session_state.analysis_results if table_name in result.get('tables', []))
-                            
-                            # Get unique data types in this table
-                            data_types = list(set([field.get('data_type', 'unknown') for field in fields]))
-                            
-                            excel_tables_data.append({
-                                'Table Name': table_name,
-                                'Fields Count': len(fields),
-                                'Used in SQL Queries': '✅' if table_used_in_queries else '❌',
-                                'Query Usage Count': query_usage_count,
-                                'Data Types in Table': ', '.join(data_types[:5]) + ('...' if len(data_types) > 5 else ''),
-                                'Status': 'Active' if table_used_in_queries else 'Unused',
-                                'Sample Fields': ', '.join([field['name'] for field in fields[:3]]) + ('...' if len(fields) > 3 else '')
-                            })
+                        # Get which queries use this table
+                        queries_using_table = []
+                        for result in st.session_state.analysis_results:
+                            if table_name in result.get('tables', []):
+                                queries_using_table.append(result.get('query_id', 'Unknown'))
+                        
+                        # Check if table exists in Excel
+                        in_excel = table_name in st.session_state.table_metadata if st.session_state.metadata_loaded else False
+                        excel_fields_count = len(st.session_state.table_metadata.get(table_name, [])) if in_excel else 0
+                        
+                        sql_tables_data.append({
+                            'Table Name': table_name,
+                            'Query Usage Count': query_usage_count,
+                            'Found in Excel': '✅' if in_excel else '❌',
+                            'Excel Fields Count': excel_fields_count,
+                            'Queries Using This Table': ', '.join(queries_using_table),
+                            'Usage Frequency': 'High' if query_usage_count > 3 else 'Medium' if query_usage_count > 1 else 'Low',
+                            'Documentation Status': 'Documented' if in_excel else 'Missing from Excel'
+                        })
                 
-                if excel_tables_data:
-                    df_excel_tables = pd.DataFrame(excel_tables_data)
+                if sql_tables_data:
+                    df_sql_tables = pd.DataFrame(sql_tables_data)
                     
                     # Add filtering options
                     col1, col2 = st.columns(2)
                     with col1:
-                        show_unused_only = st.checkbox("Show only unused tables", key="excel_unused_filter")
+                        show_undocumented_only = st.checkbox("Show only undocumented tables", key="sql_undoc_filter")
                     with col2:
-                        min_fields = st.number_input("Minimum fields count:", min_value=0, value=0, key="excel_min_fields")
+                        min_usage = st.number_input("Minimum usage count:", min_value=0, value=0, key="sql_min_usage")
                     
                     # Apply filters
-                    filtered_excel_df = df_excel_tables.copy()
+                    filtered_sql_df = df_sql_tables.copy()
                     
-                    if show_unused_only:
-                        filtered_excel_df = filtered_excel_df[filtered_excel_df['Used in SQL Queries'] == '❌']
+                    if show_undocumented_only:
+                        filtered_sql_df = filtered_sql_df[filtered_sql_df['Found in Excel'] == '❌']
                     
-                    if min_fields > 0:
-                        filtered_excel_df = filtered_excel_df[filtered_excel_df['Fields Count'] >= min_fields]
+                    if min_usage > 0:
+                        filtered_sql_df = filtered_sql_df[filtered_sql_df['Query Usage Count'] >= min_usage]
                     
-                    st.dataframe(filtered_excel_df, use_container_width=True)
+                    st.dataframe(filtered_sql_df, use_container_width=True)
                     
-                    # Summary for Excel tables
-                    total_excel_tables = len(df_excel_tables)
-                    unused_excel_tables = len(df_excel_tables[df_excel_tables['Used in SQL Queries'] == '❌'])
+                    # Summary for SQL tables
+                    total_sql_tables = len(df_sql_tables)
+                    undocumented_tables = len(df_sql_tables[df_sql_tables['Found in Excel'] == '❌'])
                     
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        st.metric("Total Tables in Excel", total_excel_tables)
+                        st.metric("Total Tables in SQL", total_sql_tables)
                     with col2:
-                        st.metric("Unused Tables", unused_excel_tables)
+                        st.metric("Undocumented Tables", undocumented_tables)
                     with col3:
-                        st.metric("Table Usage Rate", f"{((total_excel_tables-unused_excel_tables)/total_excel_tables*100):.1f}%")
+                        st.metric("Documentation Rate", f"{((total_sql_tables-undocumented_tables)/total_sql_tables*100):.1f}%")
                 
                 else:
-                    st.info("No non-temporary tables found in Excel metadata")
+                    st.info("No non-temporary tables found in SQL queries")
                 
                 st.markdown("---")
                 
