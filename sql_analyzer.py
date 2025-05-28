@@ -162,39 +162,68 @@ class SQLAnalyzer:
         return 'UNKNOWN'
     
     def _extract_tables(self, parsed) -> List[str]:
-        """Extract table names from the parsed SQL."""
+        """Extract table names specifically from FROM and JOIN clauses."""
         tables = set()
         
-        def extract_from_token(token):
-            if token.ttype is None:
-                for sub_token in token.flatten():
-                    if sub_token.ttype in (Name, None) and sub_token.value.upper() not in [
-                        'SELECT', 'FROM', 'WHERE', 'JOIN', 'ON', 'AS', 'AND', 'OR', 'IN', 'EXISTS'
-                    ]:
-                        # Check if it looks like a table name (not a column reference)
-                        if self._is_likely_table_name(sub_token.value):
-                            tables.add(sub_token.value.strip('`"[]'))
+        # Convert tokens to string for easier parsing
+        query_str = str(parsed).upper()
+        tokens = list(parsed.flatten())
         
-        # Look for FROM clauses and JOIN clauses
-        in_from = False
-        in_join = False
+        # Find FROM and JOIN clauses more precisely
+        in_from_clause = False
+        in_join_clause = False
+        next_is_table = False
         
-        for token in parsed.flatten():
-            if token.ttype is Keyword and token.value.upper() == 'FROM':
-                in_from = True
-                continue
-            elif token.ttype is Keyword and any(join in token.value.upper() for join in ['JOIN']):
-                in_join = True
-                continue
-            elif token.ttype is Keyword and token.value.upper() in ['WHERE', 'GROUP', 'ORDER', 'HAVING']:
-                in_from = False
-                in_join = False
+        for i, token in enumerate(tokens):
+            token_value = token.value.upper().strip()
+            
+            # Reset flags when encountering certain keywords
+            if token.ttype is Keyword and token_value in ['WHERE', 'GROUP', 'ORDER', 'HAVING', 'LIMIT', 'UNION', 'SELECT']:
+                in_from_clause = False
+                in_join_clause = False
+                next_is_table = False
                 continue
             
-            if (in_from or in_join) and token.ttype in (Name, None):
-                cleaned_name = token.value.strip('`"[](),')
-                if cleaned_name and self._is_likely_table_name(cleaned_name):
-                    tables.add(cleaned_name)
+            # Detect FROM clause
+            if token.ttype is Keyword and token_value == 'FROM':
+                in_from_clause = True
+                next_is_table = True
+                continue
+            
+            # Detect JOIN clauses
+            if token.ttype is Keyword and 'JOIN' in token_value:
+                in_join_clause = True
+                next_is_table = True
+                continue
+            
+            # Skip ON keyword in joins
+            if token.ttype is Keyword and token_value == 'ON':
+                next_is_table = False
+                continue
+            
+            # Extract table names when in FROM or JOIN context
+            if (in_from_clause or in_join_clause) and next_is_table:
+                if token.ttype in (Name, None) and token_value not in ['AS', 'ON', 'WHERE', 'AND', 'OR']:
+                    # Clean the table name
+                    cleaned_name = token.value.strip('`"[](),').strip()
+                    
+                    # Additional validation for table names
+                    if (cleaned_name and 
+                        not cleaned_name.upper() in ['AS', 'ON', 'WHERE', 'AND', 'OR', 'SELECT', 'FROM', 'JOIN'] and
+                        len(cleaned_name) > 0 and
+                        not cleaned_name.isdigit() and
+                        '.' not in cleaned_name or len(cleaned_name.split('.')) <= 2):  # Allow schema.table format
+                        
+                        # Remove schema prefix if present (keep only table name)
+                        if '.' in cleaned_name:
+                            cleaned_name = cleaned_name.split('.')[-1]
+                        
+                        tables.add(cleaned_name)
+                        next_is_table = False  # Found table, reset flag
+            
+            # Handle aliases (AS keyword)
+            if token.ttype is Keyword and token_value == 'AS':
+                next_is_table = False
         
         return list(tables)
     
