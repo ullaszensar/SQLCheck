@@ -545,6 +545,96 @@ def main():
                 
                 st.markdown("---")
                 
+                # New Table: SQL File Tables with Query Details
+                st.subheader("📋 SQL File Tables - Complete List with Query Details")
+                
+                sql_file_tables_data = []
+                
+                # Process each query to extract table usage details
+                for result in st.session_state.analysis_results:
+                    query_id = result.get('query_id', 'Unknown')
+                    query_type = result.get('query_type', 'UNKNOWN')
+                    tables = result.get('tables', [])
+                    temp_tables = result.get('temp_tables', [])
+                    
+                    # For each table in this query
+                    for table_name in tables:
+                        # Skip temporary tables
+                        if table_name not in temp_tables:
+                            # Create Query ID based on table name for SELECT queries
+                            if query_type == 'SELECT':
+                                custom_query_id = f"SELECT_{table_name}"
+                            else:
+                                custom_query_id = f"{query_type}_{table_name}"
+                            
+                            # Check if table exists in Excel
+                            in_excel = table_name in st.session_state.table_metadata if st.session_state.metadata_loaded else False
+                            excel_fields_count = len(st.session_state.table_metadata.get(table_name, [])) if in_excel else 0
+                            
+                            # Get sample Excel fields if available
+                            sample_fields = []
+                            if in_excel:
+                                fields = st.session_state.table_metadata.get(table_name, [])
+                                sample_fields = [field['name'] for field in fields[:3]]
+                            
+                            sql_file_tables_data.append({
+                                'Original Query ID': query_id,
+                                'Table-Based Query ID': custom_query_id,
+                                'Query Type': query_type,
+                                'Table Name': table_name,
+                                'Found in Excel': '✅' if in_excel else '❌',
+                                'Excel Fields Count': excel_fields_count,
+                                'Sample Excel Fields': ', '.join(sample_fields) if sample_fields else 'N/A',
+                                'Documentation Status': 'Documented' if in_excel else 'Missing'
+                            })
+                
+                if sql_file_tables_data:
+                    df_sql_file_tables = pd.DataFrame(sql_file_tables_data)
+                    
+                    # Add filtering options
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        filter_query_type = st.selectbox("Filter by Query Type:", ['All'] + list(df_sql_file_tables['Query Type'].unique()), key="sql_file_type_filter")
+                    with col2:
+                        show_undocumented = st.checkbox("Show only undocumented", key="sql_file_undoc")
+                    with col3:
+                        show_select_only = st.checkbox("Show only SELECT queries", key="sql_file_select")
+                    
+                    # Apply filters
+                    filtered_df = df_sql_file_tables.copy()
+                    
+                    if filter_query_type != 'All':
+                        filtered_df = filtered_df[filtered_df['Query Type'] == filter_query_type]
+                    
+                    if show_undocumented:
+                        filtered_df = filtered_df[filtered_df['Found in Excel'] == '❌']
+                    
+                    if show_select_only:
+                        filtered_df = filtered_df[filtered_df['Query Type'] == 'SELECT']
+                    
+                    st.dataframe(filtered_df, use_container_width=True)
+                    
+                    # Summary statistics
+                    total_entries = len(df_sql_file_tables)
+                    select_queries = len(df_sql_file_tables[df_sql_file_tables['Query Type'] == 'SELECT'])
+                    undocumented = len(df_sql_file_tables[df_sql_file_tables['Found in Excel'] == '❌'])
+                    unique_tables = len(df_sql_file_tables['Table Name'].unique())
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Total Table References", total_entries)
+                    with col2:
+                        st.metric("SELECT Query Tables", select_queries)
+                    with col3:
+                        st.metric("Undocumented References", undocumented)
+                    with col4:
+                        st.metric("Unique Tables", unique_tables)
+                
+                else:
+                    st.info("No table references found in SQL queries")
+                
+                st.markdown("---")
+                
                 # Table 3: Complete Field Inventory
                 st.subheader("🔍 Table 3: Complete Field Inventory from Excel")
                 
